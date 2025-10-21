@@ -1,4 +1,9 @@
-# Mycorrhizal-strategy-of-non-native-plants-varies-with-biome-and-disturbance
-Data and analyses of paper
+# Cazzaniga-et-al-Mycorrhizal-strategy-of-non-native-plants-varies-with-biome-and-disturbance
+Authors
 
-paper submitted on 10.10.2025
+Executive summary
+
+About this README
+This README is made to guide you trough the analysis 
+
+Reproducing the code
