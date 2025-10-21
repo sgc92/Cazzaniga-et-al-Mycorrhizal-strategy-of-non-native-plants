@@ -1,0 +1,877 @@
+---
+title: "code for final figures and analyses_disturbance"
+author: "Sara Cazzaniga"
+date: "`r Sys.Date()`"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+#editor_options:
+  chunk_output_type: console
+
+  - Load all necessary packages 
+```{r include=FALSE}
+RequiredPackages <- c("mgcv", "gridExtra", "betareg", "MASS", "lme4", "lmerTest", "lsmeans", "ggeffects", "spdep", "ggplot2", "ncf", "ape", "sjPlot", "gridExtra", "MuMIn", "tidyverse", "sf", "tidyverse", "DHARMa", "glmmTMB", "gstat", "sp", "ggrepel", "stringr", "car", "vcd", "multcomp", "RColorBrewer", "see", "gghalves", "ggpubr", "scales", "gghalves")
+
+for (i in RequiredPackages) { #Installs packages if not yet installed
+    if (!require(i, character.only = TRUE)) install.packages(i)
+}
+options(na.action = "na.fail")
+rm (RequiredPackages)
+rm(i)
+```
+
+```{r}
+mod_status_NM_HMI <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mod_status_NMvsALL_HMI.rds")
+summary(mod_status_NM_HMI)
+Anova(mod_status_NM_HMI)
+performance::model_performance(mod_status_NM_HMI)
+```
+
+Calculate differences 
+```{r}
+#GLOBAL
+#extract model means
+#means51 <- emmeans (mod_status_NM_HMI, pairwise ~ status | HMI.gl , type = "response", data = dat.sel_glhd)
+means51 <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_global_NMvsALL_HMI.rds")
+#calculate significant differences
+cld_sign51 <- as.data.frame(cld(means51, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)) 
+cld_sign51
+
+df_diff_NMvsALL_status_HMI <- cld_sign51 %>% 
+  dplyr::select(status, emmean, SE, HMI.gl) %>% 
+  pivot_wider(names_from = c("status", "HMI.gl"), 
+              values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff_low = (emmean_invasive_low - emmean_native_low)) %>% 
+  mutate(mean_diff_high = (emmean_invasive_high - emmean_native_high)) %>% 
+  mutate(mean_SE_low = (sqrt(SE_invasive_low^2 + SE_native_low^2))) %>% 
+  mutate(mean_SE_high = (sqrt(SE_invasive_high^2 + SE_native_high^2))) %>% 
+  mutate(prev_status_low = ifelse(mean_diff_low > 0, "more_NM", "less_NM")) %>%
+  mutate(prev_status_high = ifelse(mean_diff_high > 0, "more_NM", "less_NM")) %>%
+  mutate(difference = "mean_difference") %>% 
+  mutate(biome = "global")
+df_diff_NMvsALL_status_HMI
+```
+
+
+#####################################
+Biome
+
+
+```{r}
+mod_biome.HMI.bspec <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mod_biome_status_NMvsALL_HMI.rds")
+
+summary(mod_biome.HMI.bspec)
+Anova(mod_biome.HMI.bspec)
+performance::model_performance(mod_biome.HMI.bspec)
+```
+
+```{r}
+means52 <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_biome_NMvsALL_HMI.rds")
+#calculate significant differences
+cld_sign52 <- as.data.frame(cld(means52, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)) 
+cld_sign52
+
+df_diff_NMvsALL_HMI <- cld_sign52 %>% 
+  dplyr::select(status, emmean, SE, biome, HMI.bspec) %>% 
+  pivot_wider(id_cols = "biome", 
+              names_from = c("status", "HMI.bspec"), 
+              values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff_low = (emmean_invasive_low - emmean_native_low)) %>% 
+  mutate(mean_diff_high = (emmean_invasive_high - emmean_native_high)) %>% 
+  mutate(mean_SE_low = (sqrt(SE_invasive_low^2 + SE_native_low^2))) %>% 
+  mutate(mean_SE_high = (sqrt(SE_invasive_high^2 + SE_native_high^2))) %>% 
+  mutate(prev_status_low = ifelse(mean_diff_low > 0, "more_NM", "less_NM")) %>%
+  mutate(prev_status_high = ifelse(mean_diff_high > 0, "more_NM", "less_NM")) %>%
+  mutate(difference = "mean_difference")
+df_diff_NMvsALL_HMI
+
+saveRDS(df_diff_NMvsALL_HMI, "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_NMvsALL_HMI.rds")
+```
+
+#global without disturbance
+```{r}
+means12 <- readRDS ("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_status_NMvsALL.rds")
+#calculate significant differences
+cld_sign12 <- as.data.frame(cld(means12, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE))
+
+status_diff_NM <- cld_sign12 %>%
+  dplyr::select(status, emmean, SE) %>% 
+  pivot_wider(names_from = "status", values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff = (emmean_invasive - emmean_native)) %>% 
+  mutate(mean_SE = (sqrt(SE_invasive^2 + SE_native^2))) %>% 
+  mutate(biome = "global") %>% 
+  mutate(prev_status = case_when(
+    (mean_diff - mean_SE < 0 & mean_diff + mean_SE > 0) ~ "n.s.",  # Crosses zero
+    mean_diff > 0 ~ "more NM",                                   # Positive mean_diff
+    mean_diff < 0 ~ "more Myc"                                   # Negative mean_diff
+  )) %>% 
+  mutate(difference = "mean_difference")
+status_diff_NM
+
+df_diff_NMvsALL_status <- status_diff_NM %>%
+  dplyr::select(biome,
+         mean_diff,
+         mean_SE,
+         prev_status)
+```
+
+#biome without disturbance
+```{r}
+means32 <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_biome_NMvsALL.rds")
+cld_sign32 <- as.data.frame(cld(means32, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE))
+#extract from model with biomes and env variables
+df_diff_NMvsALL_biome <- cld_sign32 %>% 
+  dplyr::select(status, emmean, SE, biome) %>% 
+  pivot_wider(id_cols = "biome", names_from = "status", values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff = (emmean_invasive - emmean_native)) %>% 
+  mutate(mean_SE = (sqrt(SE_invasive^2 + SE_native^2))) %>% 
+  mutate(prev_status = case_when(
+    (mean_diff - mean_SE < 0 & mean_diff + mean_SE > 0) ~ "n.s.",  # Crosses zero
+    mean_diff > 0 ~ "more NM",                                   # Positive mean_diff
+    mean_diff < 0 ~ "more Myc"                                   # Negative mean_diff
+  )) %>% 
+  mutate(difference = "mean_difference")
+
+#Biome without dist
+df_diff_NMvsALL_biome <- df_diff_NMvsALL_biome %>%
+  dplyr::select(biome,
+         mean_diff,
+         mean_SE,
+         prev_status)
+df_diff_NMvsALL_biome
+```
+
+
+```{r}
+df_diff_NMvsALL_status_HMI2 <- df_diff_NMvsALL_status_HMI %>%
+  rename(mean_diff_high_HMI = mean_diff_high,
+         mean_diff_low_HMI = mean_diff_low,
+         mean_SE_high_HMI = mean_SE_high,
+         mean_SE_low_HMI = mean_SE_low,
+         prev_status_high_HMI = prev_status_high,
+         prev_status_low_HMI = prev_status_low) %>% 
+  dplyr::select(biome,
+         mean_diff_high_HMI,
+         mean_diff_low_HMI,
+         mean_SE_high_HMI,
+         mean_SE_low_HMI,
+         prev_status_high_HMI,
+         prev_status_low_HMI)
+df_diff_NMvsALL_status_HMI2
+
+df_diff_NMvsALL_status_HMI3 <- df_diff_NMvsALL_status%>%
+  full_join(df_diff_NMvsALL_status_HMI2, by = "biome")
+
+df_diff_NMvsALL_HMI <- df_diff_NMvsALL_HMI %>%
+  rename(mean_diff_high_HMI = mean_diff_high,
+         mean_diff_low_HMI = mean_diff_low,
+         mean_SE_high_HMI = mean_SE_high,
+         mean_SE_low_HMI = mean_SE_low,
+         prev_status_high_HMI = prev_status_high,
+         prev_status_low_HMI = prev_status_low) %>% 
+  dplyr::select(biome,
+         mean_diff_high_HMI,
+         mean_diff_low_HMI,
+         mean_SE_high_HMI,
+         mean_SE_low_HMI,
+         prev_status_high_HMI,
+         prev_status_low_HMI)
+df_diff_NMvsALL_HMI
+
+#dataframe for human developemnt disturbance
+df_diff_NMvsALL_HMI<-  df_diff_NMvsALL_HMI %>%
+  left_join(df_diff_NMvsALL_biome, by = c("biome")) %>% 
+  full_join(df_diff_NMvsALL_status_HMI3) %>% 
+  pivot_longer(
+    cols = c(mean_diff, mean_diff_high_HMI, mean_diff_low_HMI),
+    names_to = "type",
+    values_to = "mean_diff_value") %>% 
+  pivot_longer(
+    cols = c(mean_SE, mean_SE_high_HMI, mean_SE_low_HMI),
+    names_to = "SE_type",
+    values_to = "SE") %>% 
+  filter((type == "mean_diff" & SE_type == "mean_SE") |
+           (type == "mean_diff_high_HMI" & SE_type == "mean_SE_high_HMI") |
+           (type == "mean_diff_low_HMI" & SE_type == "mean_SE_low_HMI")) %>% 
+  dplyr::select (-SE_type) %>% 
+  mutate(type = factor (type, levels = c("mean_diff_high_HMI", "mean_diff_low_HMI", "mean_diff"))) %>% 
+  mutate(biome = factor(biome))
+
+df_diff_NMvsALL_HMI
+
+saveRDS(df_diff_NMvsALL_HMI, file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_NMvsALL_HMI.rds")
+```
+
+Plot ordered by mean diff per biome
+```{r}
+#order biomes
+ordered_biomes <- df_diff_NMvsALL_HMI %>%
+  filter(type == "mean_diff") %>%
+  arrange(mean_diff_value) %>%
+  pull(biome) %>% 
+  print()
+
+#create new col for colours
+df_diff_NMvsALL_HMI_Ord <- df_diff_NMvsALL_HMI %>%
+  mutate(color_group = case_when(
+    type == "mean_diff_high_HMI" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff_high_HMI" & mean_diff_value > 0 ~ "more NM high",
+    type == "mean_diff_high_HMI" & mean_diff_value < 0 ~ "more Myc high",
+    type == "mean_diff_low_HMI" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff_low_HMI" & mean_diff_value > 0 ~ "more NM low",
+    type == "mean_diff_low_HMI" & mean_diff_value < 0 ~ "more Myc low",
+    type == "mean_diff" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff" & mean_diff_value > 0 ~ "more NM",
+    type == "mean_diff" & mean_diff_value < 0 ~ "more Myc"
+  )) %>%
+  mutate(color_group2 = case_when(
+    type == "mean_diff" & mean_diff_value > 0 ~ "biome_NM",
+    type == "mean_diff" & mean_diff_value < 0 ~ "biome_Myc",
+    type == "mean_diff" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff_high_HMI" ~ "high_dist",
+    type == "mean_diff_low_HMI" ~ "low_dist"
+  )) %>%
+  #mutate(biome = factor(biome, levels = ordered_biomes)) %>% 
+  mutate(biome = factor (biome, levels = c("Temperate_BroadLeaf", "Tundra", "Temperate_Coniferous",
+                                          "Boreal", "Mediterranean_woodlands",
+                                          "Tropical_Moist_Broadleaf" , "Xeric_shrublands",
+                                          "Temperate_Grasslands","Montane_Grasslands",
+                                          "Tropical_Grasslands",
+                                          "global"))) %>% 
+  mutate(type = factor (type, levels = c("mean_diff_high_HMI",
+                                         "mean_diff_low_HMI",
+                                         "mean_diff"
+                                         ))) %>% 
+  mutate(color_group2 = factor (color_group2, levels = c("biome_NM",
+                                                 "biome_Myc",
+                                                 "n.s.",
+                                         "high_dist",
+                                         "low_dist"
+                                         )))
+
+df_diff_NMvsALL_HMI_Ord
+
+saveRDS(df_diff_NMvsALL_HMI_Ord, file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_NMvsALL_HMI.rds")
+
+df_diff_NMvsALL_HMI_Ord <- readRDS (file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_NMvsALL_HMI.rds")
+
+background_bands <- data.frame (
+  biome = levels (df_diff_NMvsALL_HMI_Ord$biome),
+  y_min = seq (0.5, length(levels(df_diff_NMvsALL_HMI_Ord$biome)) - 0.5, by = 1),
+  y_max = seq(1.5, length(levels(df_diff_NMvsALL_HMI_Ord$biome)) + 0.5, by = 1),
+  fill_color = rep (c("white", "lightgray"), length.out = length(df_diff_NMvsALL_HMI_Ord$biome)))
+
+#make labels
+custom_biome_labels <- c(
+  "Temperate_Coniferous" = "Temperate coniferous forests",
+  "Mediterranean_woodlands" = "Mediterranean forests, woodlands, and scrub",
+  "Montane_Grasslands" = "Montane grasslands and shrublands",
+  "Temperate_BroadLeaf" = "Temperate broadleaf and mixed forests",
+  "Boreal" = "Boreal forests",
+  "Xeric_shrublands" = "Deserts and xeric shrublands",
+  "Tropical_Moist_Broadleaf" = "Tropical and subtropical moist broadleaf forests",
+  "Temperate_Grasslands" = "Temperate grasslands, savannas, and shrublands",
+  "Tropical_Grasslands" = "Tropical and subtropical grasslands, savannas, and shrublands",
+  "Tundra" = "Tundra",
+  "global" = "Global")
+
+
+#plot
+plot_HMI_order_biome <- ggplot(data = df_diff_NMvsALL_HMI_Ord, 
+                           aes(y = biome, x = mean_diff_value, 
+                               colour = type)) +
+  geom_rect(data = background_bands, aes(xmin = -Inf, xmax = +Inf,
+                                         ymin = y_min, ymax = y_max,
+                                         fill = fill_color),
+            inherit.aes = F, alpha = 0.3) +
+  scale_fill_identity() + 
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey") +
+  
+  geom_point(size = 1.5, position = position_dodge(width = 0.8)) +
+  
+  geom_errorbarh(aes(y = biome, xmin = mean_diff_value -SE, xmax = mean_diff_value +SE),
+                 position = position_dodge(width = 0.8), height = 0.6, linewidth = 0.7) +
+  
+  labs(x = "Prevalent mycorrhizal type of non-native",
+       y = "",
+       colour = "Prevalent mycorrhizal type of non-native",
+       shape = "HMI",
+       title = "") +
+  
+  theme_minimal() + 
+  
+  theme(axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 7),
+        panel.grid.major.y = element_blank(),  # Remove grid lines on y-axis for cleaner look
+        panel.grid.minor = element_blank(),
+        legend.position = "bottom",
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.direction = "horizontal",
+        legend.key.size = unit(4, "mm")) +
+  
+  #scale_color_manual(values = c(
+  #  "biome_NM" = "darkgreen",
+  #  "biome_Myc" = "darkred",
+  #  "n.s." = "grey45",
+  #  "low_dist" = "burlywood2",
+  #  "high_dist" = "burlywood4"
+  #)) +
+  
+  scale_color_manual(values = c(
+    "mean_diff" = "forestgreen",
+    "mean_diff_low_HMI" = "yellow4",
+    "mean_diff_high_HMI" = "red4"))+
+  
+  #scale_shape_manual(values = c(
+  #  "mean_diff_high_HMI" = 15,
+  #  "mean_diff_low_HMI" = 15,
+  #  "mean_diff" = 19
+  #)) +
+  
+  scale_y_discrete(labels = custom_biome_labels) +
+  scale_size_identity() +
+  scale_linewidth_identity() #+
+  guides(color = guide_legend(reverse = TRUE, ncol = 2)#,
+         #shape = guide_legend(reverse = TRUE, ncol = 1)
+         )
+
+# Render the plot
+plot_HMI_order_biome
+
+#save
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/mod_biome_difference_NMvsALL_HMI.svg", plot=plot_HMI_order_biome, width=16, height=10, scale = 0.6) 
+```
+
+Create contrasts
+```{r}
+#contrasts
+#means_biome_NMvsALL_HMI <- readRDS("Models/means_biome_NMvsALL_HMI.rds")
+mod_biome_NMvsALL_HMI_bspec <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mod_biome_status_NMvsALL_HMI.rds")
+
+means_biome_NMvsALL_HMI <- emmeans (mod_biome_NMvsALL_HMI_bspec, pairwise ~ status * biome * HMI.bspec, 
+                                    component = "response", cov.reduce = mean, data = dat.sel_HMI_biome)
+saveRDS (means_biome_NMvsALL_HMI , file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mean_biome_status_NMvsALL_HMI_contrasts.rds")
+
+means_biome_NMvsALL_HMI <- readRDS(file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mean_biome_status_NMvsALL_HMI_contrasts.rds")
+
+#make manual contrasts
+contrasts52 <- list (
+  "Boreal high v low" =                   c (-1,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             1,-1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Mediterranean_woodlands high v low" =  c (0,0,-1,1, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,1,-1, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Montane_Grasslands high v low" =       c (0,0,0,0, -1,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 1,-1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Temperate_BroadLeaf high v low" =      c (0,0,0,0, 0,0,-1,1, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 0,0,1,-1, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Temperate_Coniferous high v low" =     c (0,0,0,0, 0,0,0,0, -1,1,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 0,0,0,0, 1,-1,0,0, 0,0,0,0, 0,0,0,0),
+  "Temperate_Grasslands high v low" =     c (0,0,0,0, 0,0,0,0, 0,0,-1,1, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 0,0,0,0, 0,0,1,-1, 0,0,0,0, 0,0,0,0),
+  "Tropical_Grasslands high v low" =      c  (0,0,0,0, 0,0,0,0, 0,0,0,0, -1,1,0,0, 0,0,0,0,
+                                              0,0,0,0, 0,0,0,0, 0,0,0,0, 1,-1,0,0, 0,0,0,0),
+  "Tropical_Moist_Broadleaf high v low" = c (0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,-1,1, 0,0,0,0,
+                                             0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,-1, 0,0,0,0),
+  "Tundra high v low" =                   c (0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, -1,1, 0,0,
+                                             0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 1,-1,0,0),
+  "Xeric_shrublands high v low" =         c (0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,-1,1,
+                                             0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,-1)
+)
+
+#extract results to df:
+results52 <- lsmeans::contrast(means_biome_NMvsALL_HMI,contrasts52)
+results.df52 <- as.data.frame(results52)
+results.df52
+
+results.df52 <- results.df52 %>%
+  mutate(significance = case_when(
+    p.value >= 0.05 ~ "",
+    p.value < 0.05 & p.value >= 0.01 ~ "*",
+    p.value < 0.01 & p.value >= 0.005 ~ "**",
+    p.value < 0.005 ~ "***"
+  )) %>% 
+   mutate(significance = as.character(significance)) %>% 
+  mutate(biome = str_extract(contrast, "^[^ ]+"))
+results.df52
+
+#saveRDS (results.df52, file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/contrasts_NMvsALL_mod_biome.HMI.bspec.rds")
+```
+```{r}
+df_diff_NMvsALL_HMI_Ord <- readRDS (file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_NMvsALL_HMI.rds")
+
+df_diff_NMvsALL_HMI_diff <- df_diff_NMvsALL_HMI_Ord %>% 
+  dplyr::select(biome, type, mean_diff_value, SE) %>% 
+  filter(type %in% c("mean_diff_high_HMI", "mean_diff_low_HMI")) %>%
+  pivot_wider(names_from = type, values_from = c(mean_diff_value, SE)) %>%
+  mutate(
+    difference = mean_diff_value_mean_diff_high_HMI - mean_diff_value_mean_diff_low_HMI,
+    SE_difference = sqrt(SE_mean_diff_high_HMI^2 + SE_mean_diff_low_HMI^2)
+  ) %>%
+  dplyr::select(biome, difference, SE_difference) %>% 
+  mutate(biome = factor (biome, levels = c("Temperate_BroadLeaf", "Tundra", "Temperate_Coniferous",
+                                          "Boreal", "Mediterranean_woodlands",
+                                          "Tropical_Moist_Broadleaf" , "Xeric_shrublands",
+                                          "Temperate_Grasslands","Montane_Grasslands",
+                                          "Tropical_Grasslands",
+                                          "global"))) 
+
+  #make labels
+custom_biome_labels <- c(
+  "Temperate_Coniferous" = "Temperate coniferous forests",
+  "Mediterranean_woodlands" = "Mediterranean forests",
+  "Montane_Grasslands" = "Montane grasslands and shrublands",
+  "Temperate_BroadLeaf" = "Temperate broadleaf and mixed forests",
+  "Boreal" = "Boreal forests",
+  "Xeric_shrublands" = "Deserts and xeric shrublands",
+  "Tropical_Moist_Broadleaf" = "Tropical moist broadleaf forests",
+  "Temperate_Grasslands" = "Temperate grasslands and shrublands",
+  "Tropical_Grasslands" = "Tropical grasslands and shrublands",
+  "Tundra" = "Tundra",
+  "global" = "Global")
+
+
+df_diff_NMvsALL_HMI_diff <- df_diff_NMvsALL_HMI_diff %>%
+  mutate(direction = ifelse(difference > 0, "more NM", "more Myc"))
+  
+background_bands <- df_diff_NMvsALL_HMI_diff %>%
+  mutate(y_num = as.numeric(biome)) %>%
+  mutate(fill_color = ifelse(y_num %% 2 == 0, "grey95", "white"),
+         y_min = y_num - 0.5,
+         y_max = y_num + 0.5)
+
+
+diff_plot_NMvsALL <- ggplot(data = df_diff_NMvsALL_HMI_diff, aes(y = biome, x = difference)) +
+  # Background alternating bands
+  geom_rect(data = background_bands,
+            aes(xmin = -Inf, xmax = +Inf, ymin = y_min, ymax = y_max, fill = fill_color),
+            inherit.aes = FALSE, alpha = 0.5) +
+  scale_fill_identity() +
+
+  # Dashed line at zero
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40") +
+
+  # Error bars
+  geom_errorbarh(aes(xmin = difference - SE_difference, xmax = difference + SE_difference,
+                     color = ifelse(difference > 0, "more NM", "more Myc")),
+                 height = 0.6, linewidth = 0.7) +
+  
+  # Points
+  geom_point(aes(color = ifelse(difference > 0, "more NM", "more Myc")),
+             size = 1.5) +
+
+  # Axes and labels
+  labs(x = "",
+       y = "",
+       color = "Direction of difference") +
+
+  # Colors
+  scale_color_manual(values = c("more NM" = "forestgreen", "more Myc" = "red4")) +
+
+  # Custom theme
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.title.x = element_text(size = 9),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none") +
+  
+  scale_size_identity() +
+  scale_linewidth_identity() +
+  scale_y_discrete(labels = custom_biome_labels)
+
+diff_plot_NMvsALL
+
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/Plot_differenceofdifference_NMvsALL_HMI.svg", plot=diff_plot_NMvsALL, width=3, height=10, scale = 0.6) 
+```
+
+#########################################
+######################################################################
+###############################################
+
+```{r}
+mod_status_AMNM_HMI <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mod_status_AMNMvsAM_NM_HMI.rds")
+summary(mod_status_AMNM_HMI)
+Anova(mod_status_AMNM_HMI)
+performance::model_performance(mod_status_AMNM_HMI)
+```
+
+Calculate differences 
+```{r}
+#GLOBAL
+means51 <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_global_AMNMvsAM_NM_HMI.rds")
+#calculate significant differences
+cld_sign51 <- as.data.frame(cld(means51, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)) 
+cld_sign51
+
+df_diff_AMNMvsAM_NM_status_HMI <- cld_sign51 %>% 
+  dplyr::select(status, emmean, SE, HMI.gl) %>% 
+  pivot_wider(names_from = c("status", "HMI.gl"), 
+              values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff_low = (emmean_invasive_low - emmean_native_low)) %>% 
+  mutate(mean_diff_high = (emmean_invasive_high - emmean_native_high)) %>% 
+  mutate(mean_SE_low = (sqrt(SE_invasive_low^2 + SE_native_low^2))) %>% 
+  mutate(mean_SE_high = (sqrt(SE_invasive_high^2 + SE_native_high^2))) %>% 
+  mutate(prev_status_low = ifelse(mean_diff_low > 0, "more_NM", "less_NM")) %>%
+  mutate(prev_status_high = ifelse(mean_diff_high > 0, "more_NM", "less_NM")) %>%
+  mutate(difference = "mean_difference") %>% 
+  mutate(biome = "global")
+df_diff_AMNMvsAM_NM_status_HMI
+```
+
+
+#####################################
+Biome
+
+
+```{r}
+mod_biome.AMNM_HMI.bspec <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mod_biome_status_AMNMvsAM_NM_HMI.rds")
+
+summary(mod_biome.AMNM_HMI.bspec)
+Anova(mod_biome.AMNM_HMI.bspec)
+performance::model_performance(mod_biome.AMNM_HMI.bspec)
+```
+
+```{r}
+means52 <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_biome_AMNMvsAM_NM_HMI.rds")
+#calculate significant differences
+cld_sign52 <- as.data.frame(cld(means52, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)) 
+cld_sign52
+
+df_diff_AMNMvsAM_NM_HMI <- cld_sign52 %>% 
+  dplyr::select(status, emmean, SE, biome, HMI.bspec) %>% 
+  pivot_wider(id_cols = "biome", 
+              names_from = c("status", "HMI.bspec"), 
+              values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff_low = (emmean_invasive_low - emmean_native_low)) %>% 
+  mutate(mean_diff_high = (emmean_invasive_high - emmean_native_high)) %>% 
+  mutate(mean_SE_low = (sqrt(SE_invasive_low^2 + SE_native_low^2))) %>% 
+  mutate(mean_SE_high = (sqrt(SE_invasive_high^2 + SE_native_high^2))) %>% 
+  mutate(prev_status_low = ifelse(mean_diff_low > 0, "more_NM", "less_NM")) %>%
+  mutate(prev_status_high = ifelse(mean_diff_high > 0, "more_NM", "less_NM")) %>%
+  mutate(difference = "mean_difference")
+
+#saveRDS(df_diff_AMNMvsAM_NM_HMI, "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_AMNMvsAM_NM_HMI.rds")
+
+#df_diff_AMNMvsAM_NM_biome <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_AMNMvsAM_NM_biome.rds")
+```
+
+#global without disturbance
+```{r}
+means12 <- readRDS ("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_status_AMNMvsAM_NM.rds")
+#calculate significant differences
+cld_sign12 <- as.data.frame(cld(means12, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE))
+
+status_diff_NM <- cld_sign12 %>%
+  dplyr::select(status, emmean, SE) %>% 
+  pivot_wider(names_from = "status", values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff = (emmean_invasive - emmean_native)) %>% 
+  mutate(mean_SE = (sqrt(SE_invasive^2 + SE_native^2))) %>% 
+  mutate(biome = "global") %>% 
+  mutate(prev_status = case_when(
+    (mean_diff - mean_SE < 0 & mean_diff + mean_SE > 0) ~ "n.s.",  # Crosses zero
+    mean_diff > 0 ~ "more AMNM",                                   # Positive mean_diff
+    mean_diff < 0 ~ "more AM or NM"                                   # Negative mean_diff
+  )) %>% 
+  mutate(difference = "mean_difference")
+status_diff_NM
+
+df_diff_AMNMvsAM_NM_status <- status_diff_NM %>%
+  dplyr::select(biome,
+         mean_diff,
+         mean_SE,
+         prev_status)
+```
+
+#biome without disturbance
+```{r}
+means32 <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/means_biome_AMNMvsAM_NM.rds")
+cld_sign32 <- as.data.frame(cld(means32, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE))
+#extract from model with biomes and env variables
+df_diff_AMNMvsAM_NM_biome <- cld_sign32 %>% 
+  dplyr::select(status, emmean, SE, biome) %>% 
+  pivot_wider(id_cols = "biome", names_from = "status", values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff = (emmean_invasive - emmean_native)) %>% 
+  mutate(mean_SE = (sqrt(SE_invasive^2 + SE_native^2))) %>% 
+  mutate(prev_status = case_when(
+    (mean_diff - mean_SE < 0 & mean_diff + mean_SE > 0) ~ "n.s.",  # Crosses zero
+    mean_diff > 0 ~ "more AMNM",                                   # Positive mean_diff
+    mean_diff < 0 ~ "more Am or NM"                                   # Negative mean_diff
+  )) %>% 
+  mutate(difference = "mean_difference")
+
+#Biome without dist
+df_diff_AMNMvsAM_NM_biome <- df_diff_AMNMvsAM_NM_biome %>%
+  dplyr::select(biome,
+         mean_diff,
+         mean_SE,
+         prev_status)
+```
+
+
+```{r}
+df_diff_AMNMvsAM_NM_status_HMI2 <- df_diff_AMNMvsAM_NM_status_HMI %>%
+  rename(mean_diff_high_HMI = mean_diff_high,
+         mean_diff_low_HMI = mean_diff_low,
+         mean_SE_high_HMI = mean_SE_high,
+         mean_SE_low_HMI = mean_SE_low,
+         prev_status_high_HMI = prev_status_high,
+         prev_status_low_HMI = prev_status_low) %>% 
+  dplyr::select(biome,
+         mean_diff_high_HMI,
+         mean_diff_low_HMI,
+         mean_SE_high_HMI,
+         mean_SE_low_HMI,
+         prev_status_high_HMI,
+         prev_status_low_HMI)
+df_diff_AMNMvsAM_NM_status_HMI2
+
+df_diff_AMNMvsAM_NM_status_HMI3 <- df_diff_AMNMvsAM_NM_status%>%
+  full_join(df_diff_AMNMvsAM_NM_status_HMI2, by = "biome")
+
+df_diff_AMNMvsAM_NM_HMI <- df_diff_AMNMvsAM_NM_HMI %>%
+  rename(mean_diff_high_HMI = mean_diff_high,
+         mean_diff_low_HMI = mean_diff_low,
+         mean_SE_high_HMI = mean_SE_high,
+         mean_SE_low_HMI = mean_SE_low,
+         prev_status_high_HMI = prev_status_high,
+         prev_status_low_HMI = prev_status_low) %>% 
+  dplyr::select(biome,
+         mean_diff_high_HMI,
+         mean_diff_low_HMI,
+         mean_SE_high_HMI,
+         mean_SE_low_HMI,
+         prev_status_high_HMI,
+         prev_status_low_HMI)
+df_diff_AMNMvsAM_NM_HMI
+
+#dataframe for human developemnt disturbance
+df_diff_AMNMvsAM_NM_HMI<-  df_diff_AMNMvsAM_NM_HMI %>%
+  left_join(df_diff_AMNMvsAM_NM_biome, by = c("biome")) %>% 
+  full_join(df_diff_AMNMvsAM_NM_status_HMI3) %>% 
+  pivot_longer(
+    cols = c(mean_diff, mean_diff_high_HMI, mean_diff_low_HMI),
+    names_to = "type",
+    values_to = "mean_diff_value") %>% 
+  pivot_longer(
+    cols = c(mean_SE, mean_SE_high_HMI, mean_SE_low_HMI),
+    names_to = "SE_type",
+    values_to = "SE") %>% 
+  filter((type == "mean_diff" & SE_type == "mean_SE") |
+           (type == "mean_diff_high_HMI" & SE_type == "mean_SE_high_HMI") |
+           (type == "mean_diff_low_HMI" & SE_type == "mean_SE_low_HMI")) %>% 
+  dplyr::select (-SE_type) %>% 
+  mutate(type = factor (type, levels = c("mean_diff_high_HMI", "mean_diff_low_HMI", "mean_diff"))) %>% 
+  mutate(biome = factor(biome))
+
+df_diff_AMNMvsAM_NM_HMI
+```
+
+Plot ordered by mean diff per biome
+```{r}
+#order biomes
+ordered_biomes <- df_diff_AMNMvsAM_NM_HMI %>%
+  filter(type == "mean_diff") %>%
+  arrange(mean_diff_value) %>%
+  pull(biome) %>% 
+  print()
+
+#create new col for colours
+df_diff_AMNMvsAM_NM_HMI_Ord <- df_diff_AMNMvsAM_NM_HMI %>%
+  mutate(color_group = case_when(
+    type == "mean_diff_high_HMI" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff_high_HMI" & mean_diff_value > 0 ~ "more AMNM high",
+    type == "mean_diff_high_HMI" & mean_diff_value < 0 ~ "more AM or NM high",
+    type == "mean_diff_low_HMI" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff_low_HMI" & mean_diff_value > 0 ~ "more AMNM low",
+    type == "mean_diff_low_HMI" & mean_diff_value < 0 ~ "more Am or NM low",
+    type == "mean_diff" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff" & mean_diff_value > 0 ~ "more AMNM",
+    type == "mean_diff" & mean_diff_value < 0 ~ "more AM or NM"
+  )) %>%
+  mutate(color_group2 = case_when(
+    type == "mean_diff" & mean_diff_value > 0 ~ "biome_AMNM",
+    type == "mean_diff" & mean_diff_value < 0 ~ "biome_AM or NM",
+    type == "mean_diff" & mean_diff_value - SE < 0 & mean_diff_value + SE > 0 ~ "n.s.",
+    type == "mean_diff_high_HMI" ~ "high_dist",
+    type == "mean_diff_low_HMI" ~ "low_dist"
+  )) %>%
+  #mutate(biome = factor(biome, levels = ordered_biomes)) %>% 
+  mutate(biome = factor (biome, levels = c("Temperate_BroadLeaf", "Tundra", "Temperate_Coniferous",
+                                          "Boreal", "Mediterranean_woodlands",
+                                          "Tropical_Moist_Broadleaf" , "Xeric_shrublands",
+                                          "Temperate_Grasslands","Montane_Grasslands",
+                                          "Tropical_Grasslands",
+                                          "global"))) %>% 
+  mutate(type = factor (type, levels = c("mean_diff_high_HMI",
+                                         "mean_diff_low_HMI",
+                                         "mean_diff"
+                                         ))) %>% 
+  mutate(color_group2 = factor (color_group2, levels = c("biome_AMNM",
+                                                 "biome_AM_NM",
+                                                 "n.s.",
+                                         "high_dist",
+                                         "low_dist"
+                                         )))
+
+df_diff_AMNMvsAM_NM_HMI_Ord
+
+saveRDS(df_diff_AMNMvsAM_NM_HMI_Ord, file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_AMNMvsAM_NM_HMI.rds")
+
+df_diff_AMNMvsAM_NM_HMI_Ord <- readRDS (file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/DF/df_diff_AMNMvsAM_NM_HMI.rds")
+
+background_bands <- data.frame (
+  biome = levels (df_diff_AMNMvsAM_NM_HMI_Ord$biome),
+  y_min = seq (0.5, length(levels(df_diff_AMNMvsAM_NM_HMI_Ord$biome)) - 0.5, by = 1),
+  y_max = seq(1.5, length(levels(df_diff_AMNMvsAM_NM_HMI_Ord$biome)) + 0.5, by = 1),
+  fill_color = rep (c("white", "lightgray"), length.out = length(df_diff_AMNMvsAM_NM_HMI_Ord$biome)))
+
+#make labels
+custom_biome_labels <- c(
+  "Temperate_Coniferous" = "Temperate coniferous forests",
+  "Mediterranean_woodlands" = "Mediterranean forests, woodlands, and scrub",
+  "Montane_Grasslands" = "Montane grasslands and shrublands",
+  "Temperate_BroadLeaf" = "Temperate broadleaf and mixed forests",
+  "Boreal" = "Boreal forests",
+  "Xeric_shrublands" = "Deserts and xeric shrublands",
+  "Tropical_Moist_Broadleaf" = "Tropical and subtropical moist broadleaf forests",
+  "Temperate_Grasslands" = "Temperate grasslands, savannas, and shrublands",
+  "Tropical_Grasslands" = "Tropical and subtropical grasslands, savannas, and shrublands",
+  "Tundra" = "Tundra",
+  "global" = "Global")
+
+
+#plot
+plot_HMI_order_biome <- ggplot(data = df_diff_AMNMvsAM_NM_HMI_Ord, 
+                           aes(y = biome, x = mean_diff_value, 
+                               colour = type)) +
+  geom_rect(data = background_bands, aes(xmin = -Inf, xmax = +Inf,
+                                         ymin = y_min, ymax = y_max,
+                                         fill = fill_color),
+            inherit.aes = F, alpha = 0.3) +
+  scale_fill_identity() + 
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey") +
+  
+  geom_point(size = 1.5, position = position_dodge(width = 0.8)) +
+  
+  geom_errorbarh(aes(y = biome, xmin = mean_diff_value -SE, xmax = mean_diff_value +SE),
+                 position = position_dodge(width = 0.8), height = 0.6, linewidth = 0.7) +
+  
+  labs(x = "Prevalent mycorrhizal type of non-native",
+       y = "",
+       colour = "Prevalent mycorrhizal type of non-native",
+       shape = "HMI",
+       title = "") +
+  
+  theme_minimal() + 
+  
+  theme(axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 7),
+        panel.grid.major.y = element_blank(),  # Remove grid lines on y-axis for cleaner look
+        panel.grid.minor = element_blank(),
+        legend.position = "bottom",
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.direction = "horizontal",
+        legend.key.size = unit(4, "mm")) +
+  
+  #scale_color_manual(values = c(
+  #  "biome_AMNM" = "darkgreen",
+  #  "biome_AM_NM" = "darkred",
+  #  "n.s." = "grey45",
+  #  "low_dist" = "burlywood2",
+  #  "high_dist" = "burlywood4"
+  #)) +
+  
+  scale_color_manual(values = c(
+    "mean_diff" = "blue4",
+    "mean_diff_low_HMI" = "yellow4",
+    "mean_diff_high_HMI" = "red4"))+
+  
+  #scale_shape_manual(values = c(
+  #  "mean_diff_high_HMI" = 15,
+  #  "mean_diff_low_HMI" = 15,
+  #  "mean_diff" = 19
+  #)) +
+  
+  scale_y_discrete(labels = custom_biome_labels) +
+  scale_size_identity() +
+  scale_linewidth_identity() #+
+  guides(color = guide_legend(reverse = TRUE, ncol = 2)#,
+         #shape = guide_legend(reverse = TRUE, ncol = 1)
+         )
+
+# Render the plot
+plot_HMI_order_biome
+
+#save
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/mod_biome_difference_AMNMvsAM_NM_HMI.svg", plot=plot_HMI_order_biome, width=16, height=10, scale = 0.6) 
+```
+
+Create contrasts
+```{r}
+mod_biome.AMNM_HMI.bspec <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mod_biome_status_AMNMvsAM_NM_HMI.rds")
+
+dat.sel_HMI_biome <- mod_biome.AMNM_HMI.bspec$frame
+
+means_biome_AMNMvsALL_HMI <- emmeans (mod_biome.AMNM_HMI.bspec, pairwise ~ status * biome * HMI.bspec, 
+                                    component = "response", cov.reduce = mean, data = dat.sel_HMI_biome)
+
+saveRDS (means_biome_AMNMvsALL_HMI , file = "C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mean_biome_status_AMNMvsALL_HMI_contrasts.rds")
+
+means_biome_AMNMvsALL_HMI <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/mean_biome_status_AMNMvsALL_HMI_contrasts.rds")
+
+contrasts52 <- list (
+  "Boreal high v low" =                   c (-1,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             1,-1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Mediterranean_woodlands high v low" =  c (0,0,-1,1, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,1,-1, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Montane_Grasslands high v low" =       c (0,0,0,0, -1,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 1,-1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Temperate_BroadLeaf high v low" =      c (0,0,0,0, 0,0,-1,1, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 0,0,1,-1, 0,0,0,0, 0,0,0,0, 0,0,0,0),
+  "Temperate_Coniferous high v low" =     c (0,0,0,0, 0,0,0,0, -1,1,0,0, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 0,0,0,0, 1,-1,0,0, 0,0,0,0, 0,0,0,0),
+  "Temperate_Grasslands high v low" =     c (0,0,0,0, 0,0,0,0, 0,0,-1,1, 0,0,0,0, 0,0,0,0,
+                                             0,0,0,0, 0,0,0,0, 0,0,1,-1, 0,0,0,0, 0,0,0,0),
+  "Tropical_Grasslands high v low" =      c  (0,0,0,0, 0,0,0,0, 0,0,0,0, -1,1,0,0, 0,0,0,0,
+                                              0,0,0,0, 0,0,0,0, 0,0,0,0, 1,-1,0,0, 0,0,0,0),
+  "Tropical_Moist_Broadleaf high v low" = c (0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,-1,1, 0,0,0,0,
+                                             0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,-1, 0,0,0,0),
+  "Tundra high v low" =                   c (0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, -1,1, 0,0,
+                                             0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 1,-1,0,0),
+  "Xeric_shrublands high v low" =         c (0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,-1,1,
+                                             0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,-1)
+)
+
+#extract results to df:
+results52 <- lsmeans::contrast(means_biome_AMNMvsALL_HMI,contrasts52)
+results.df52 <- as.data.frame(results52)
+results.df52
+
+results.df52 <- results.df52 %>%
+  mutate(significance = case_when(
+    p.value >= 0.05 ~ "",
+    p.value < 0.05 & p.value >= 0.01 ~ "*",
+    p.value < 0.01 & p.value >= 0.005 ~ "**",
+    p.value < 0.005 ~ "***"
+  )) %>% 
+   mutate(significance = as.character(significance)) %>% 
+  mutate(biome = str_extract(contrast, "^[^ ]+"))
+results.df52
+
+#saveRDS (results.df52, file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/contrasts_AMNMvsAM_NM_mod_biome.AMNM_HMI.bspec.rds")
+```
+
+
+#########################################

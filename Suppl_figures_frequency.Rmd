@@ -1,0 +1,281 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Need to make density plots for 
+mycorrhizal type
+SDI , HMI, 
+MAT, MAP , coarsefrag , SOCstock ,sand , PH
+
+Load all necessary packages 
+```{r include=FALSE}
+RequiredPackages <- c("mgcv", "gridExtra", "betareg", "MASS", "lme4", "lmerTest", "lsmeans", "ggeffects", "spdep", "ggplot2", "ncf", "ape", "sjPlot", "gridExtra", "MuMIn", "tidyverse", "maps", "sf", "tidyverse", "DHARMa", "glmmTMB", "gstat", "sp", "ggrepel", "stringr", "car", "vcd", "multcomp", "FSA")
+
+for (i in RequiredPackages) { #Installs packages if not yet installed
+    if (!require(i, character.only = TRUE)) install.packages(i)
+}
+options(na.action = "na.fail")
+rm (RequiredPackages)
+rm(i)
+```
+
+Filter out biomes with low counts
+```{r}
+dat <- readRDS("data/sPlot4_sel_var_plot_inv_myc_scaled_SC0625.rds")
+dat.sel <- dat[!is.na(dat$biome), ]
+
+dat_HMI <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/data/sPlot4_sel_var_plot_inv_myc_scaled_SC0625_HMI.rds")
+dat_HMI.sel <- dat_HMI[!is.na(dat_HMI$biome), ]
+
+low.biomes<- c("Mangroves", "Tropical_Coniferous", "Flooded_Grasslands", "Tropical_Deciduous_Broadleaf")
+dat.sel <- dat.sel %>% subset (!biome %in% low.biomes) %>% droplevels() 
+dat_HMI.sel <- dat_HMI.sel %>% subset (!biome %in% low.biomes) %>% droplevels() 
+count(dat.sel, biome)
+count(dat_HMI.sel, biome)
+```
+
+
+#####################################
+Mycorrhizal types
+```{r}
+# Example of wide to long conversion
+dat_long <- dat.sel %>%
+  pivot_longer(cols = c(NMct, AMct, EMct, AMNMct), names_to = "myc_type", values_to = "count")
+
+ggplot(dat_long, aes( x = status, y = count, fill = myc_type)) +
+  geom_bar(stat = "identity", position = "stack") +
+  theme_minimal() +
+  facet_grid(~biome, scales = "free_y",  drop = TRUE)+
+  labs(
+    title = "Distribution of Mycorrhizal Types Across Biomes",
+    x = "Biome",
+    y = "Count",
+    fill = "Myc Type"
+  ) +
+  scale_fill_brewer(palette = "Set3") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        strip.text.x = element_text(angle = 45, hjust = 0))
+```
+
+#####################################
+Frequency plots for SDI
+```{r}
+#use only one row of dataset
+dist <- dat.sel %>% distinct(plot_id, .keep_all = TRUE)
+
+SDI_freq <- ggplot(dist, aes(x = shan_dist)) +
+  geom_density(aes(x = shan_dist, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of SDI Across Biomes",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position = "none")
+SDI_freq
+```
+#SDI _ frequency with quantiles
+```{r}
+#shan disturbance 
+quantiles_sh <- dist %>%
+  group_by(biome) %>%
+  summarize(
+    Q25 = quantile(shan_dist, 0.25),
+    Q75 = quantile(shan_dist, 0.75))
+#global
+Q1_sh <- quantile(dist$shan_dist, probs = 0.25)
+Q3_sh <- quantile(dist$shan_dist, probs = 0.75)
+quantiles_sh_global <- data.frame(Q25 = Q1_sh, Q75 = Q3_sh, row.names = "")
+print(quantiles_sh_global)
+
+
+sh_density_facet <- ggplot(dist, aes(x = shan_dist, fill = biome, color = biome)) +
+  geom_density(alpha = 0.4, adjust = 1) +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "Density Plot of SDI",
+    x = "",
+    y = "Density"
+  ) + 
+  theme(legend.position = "none")+
+  scale_fill_brewer(palette = "Set3") +
+  scale_color_brewer(palette = "Set3") +
+  geom_vline(data = quantiles_sh, aes(xintercept = Q25), linetype = "dashed", color = "blue1") +
+  geom_vline(data = quantiles_sh, aes(xintercept = Q75), linetype = "dashed", color = "red1") +
+  geom_vline(data = quantiles_sh_global, aes(xintercept = Q25), color = "blue4", linetype = "solid") +
+  geom_vline(data = quantiles_sh_global, aes(xintercept = Q75), color = "red4", linetype = "solid") +
+  geom_text(data = quantiles_sh, aes(x = Q25, y = Inf, label = "Q25"), 
+            color = "blue1", angle = 90, vjust = -0.5, hjust = 1, size = 3) +
+  geom_text(data = quantiles_sh, aes(x = Q75, y = Inf, label = "Q75"), 
+            color = "red1", angle = 90, vjust = -0.5, hjust = 1, size = 3)
+sh_density_facet
+```
+
+
+#####################################
+Frequency plots for HMI
+```{r}
+#use only one row of dataset
+dat_HMI.sel <- dat_HMI.sel[!is.na(dat_HMI.sel$HMI), ]
+dist_HMI <- dat_HMI.sel %>% distinct(plot_id, .keep_all = TRUE)
+
+HMI_freq <- ggplot(dist_HMI, aes(x = HMI)) +
+  geom_density(aes(x = HMI, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of HMI Across Biomes",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position="none")
+HMI_freq
+```
+
+#SDI _ frequency with quantiles
+```{r}
+#shan disturbance 
+quantiles_HMI <- dist_HMI %>%
+  group_by(biome) %>%
+  summarize(
+    Q25 = quantile(HMI, 0.25),
+    Q75 = quantile(HMI, 0.75))
+#global
+Q1_HMI <- quantile(dist_HMI$HMI, probs = 0.25)
+Q3_HMI <- quantile(dist_HMI$HMI, probs = 0.75)
+quantiles_HMI_global <- data.frame(Q25 = Q1_HMI, Q75 = Q3_HMI, row.names = "")
+print(quantiles_HMI_global)
+
+
+HMI_density_facet <- ggplot(dist_HMI, aes(x = HMI, fill = biome, color = biome)) +
+  geom_density(alpha = 0.4, adjust = 1) +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "Density Plot of HMI",
+    x = "",
+    y = "Density"
+  ) + 
+  theme(legend.position="none") +
+  scale_fill_brewer(palette = "Set3") +
+  scale_color_brewer(palette = "Set3") +
+  geom_vline(data = quantiles_HMI, aes(xintercept = Q25), linetype = "dashed", color = "blue1") +
+  geom_vline(data = quantiles_HMI, aes(xintercept = Q75), linetype = "dashed", color = "red1") +
+  geom_vline(data = quantiles_HMI_global, aes(xintercept = Q25), color = "blue4", linetype = "solid") +
+  geom_vline(data = quantiles_HMI_global, aes(xintercept = Q75), color = "red4", linetype = "solid") +
+  geom_text(data = quantiles_HMI, aes(x = Q25, y = Inf, label = "Q25"), 
+            color = "blue1", angle = 90, vjust = -0.5, hjust = 1, size = 3) +
+  geom_text(data = quantiles_HMI, aes(x = Q75, y = Inf, label = "Q75"), 
+            color = "red1", angle = 90, vjust = -0.5, hjust = 1, size = 3)
+HMI_density_facet
+```
+
+```{r}
+library(cowplot)
+dist_plot <- plot_grid(HMI_density_facet, sh_density_facet, ncol = 2)
+dist_plot
+
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/frequency_dist_per_biome.svg", plot=dist_plot, width=10, height=20, scale = 0.5)
+```
+
+
+############################################################################
+Env Variables
+```{r}
+#use only one row of dataset
+dat.sel.env <- dat.sel %>% distinct(plot_id, .keep_all = TRUE)
+
+MAT_freq <- ggplot(dat.sel.env, aes(x = MAT)) +
+  geom_density(aes(x = MAT, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "MAT",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position = "none")
+MAT_freq
+
+MAP_freq <- ggplot(dat.sel.env, aes(x = MAP)) +
+  geom_density(aes(x = MAP, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "MAP",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position = "none")
+MAP_freq
+
+coarsefrag_freq <- ggplot(dat.sel.env, aes(x = coarsefrag)) +
+  geom_density(aes(x = coarsefrag, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "coarse fragment",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position = "none")
+coarsefrag_freq
+
+SOCstock_freq <- ggplot(dat.sel.env, aes(x = SOCstock)) +
+  geom_density(aes(x = SOCstock, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "SOCstock",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position = "none")
+SOCstock_freq
+
+
+sand_freq <- ggplot(dat.sel.env, aes(x = sand)) +
+  geom_density(aes(x = sand, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "sand",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position = "none")
+sand_freq
+
+
+PH_freq <- ggplot(dat.sel.env, aes(x = PH)) +
+  geom_density(aes(x = PH, fill = biome, color = biome), alpha = 0.2, adjust = 1.5) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  facet_wrap(~ biome, scales = "free_y", nrow = 10) +
+  theme_minimal(base_size = 9) +
+  labs(
+    title = "pH",
+    x = "",
+    y = "Frequency"
+  ) +
+  theme(legend.position = "none")
+PH_freq
+```
+
+```{r}
+library(cowplot)
+comb_plot <- plot_grid(MAT_freq, MAP_freq, coarsefrag_freq, SOCstock_freq, sand_freq, PH_freq, ncol = 6)
+comb_plot
+
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/frequency_env_per_biome.svg", plot=comb_plot, width=20, height=20, scale = 0.5)
+```
+

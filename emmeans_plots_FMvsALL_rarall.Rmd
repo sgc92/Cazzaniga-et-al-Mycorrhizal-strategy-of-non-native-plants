@@ -1,0 +1,269 @@
+---
+title: "code for final figures and analyses"
+author: "Sara Cazzaniga"
+date: "`r Sys.Date()`"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+#editor_options:
+  chunk_output_type: console
+
+  - Load all necessary packages 
+```{r include=FALSE}
+RequiredPackages <- c("mgcv", "gridExtra", "betareg", "MASS", "lme4", "lmerTest", "lsmeans", "ggeffects", "spdep", "ggplot2", "ncf", "ape", "sjPlot", "gridExtra", "MuMIn", "tidyverse", "sf", "tidyverse", "DHARMa", "glmmTMB", "gstat", "sp", "ggrepel", "stringr", "car", "vcd", "multcomp", "RColorBrewer", "see", "gghalves", "ggpubr", "scales", "gghalves")
+
+for (i in RequiredPackages) { #Installs packages if not yet installed
+    if (!require(i, character.only = TRUE)) install.packages(i)
+}
+options(na.action = "na.fail")
+rm (RequiredPackages)
+rm(i)
+```
+
+```{r}
+dat <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/data/sPlot4_sel_var_plot_inv_myc_scaled_SC0625.rds")
+```
+
+####################################################################################################################################################################################################################################################################
+
+#1. Models for global
+
+Model with status and env variables 
+```{r}
+mod_global_AMNMvsALL <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/all_rar/mod_global_AMNMvsAM_NM_rarall.rds")
+summary(mod_global_AMNMvsALL)
+Anova(mod_global_AMNMvsALL)
+performance::model_performance(mod_global_AMNMvsALL)
+```
+
+```{r}
+#extract model means
+#means12 <- emmeans (mod_global_AMNMvsALL, ~ status , component = "response", cov.reduce = mean, data = dat)
+means12 <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/all_rar/means_global_AMNMvsAM_NM_rarall.rds")
+#calculate significant differences
+cld_sign12 <- as.data.frame(cld(means12, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE))
+cld_sign12
+
+#plot emmeans
+plot_mean_status_FM <- ggplot(data = cld_sign12, aes (x = status, y = emmean)) +
+  geom_point (aes(colour = status), size = 1) +
+  geom_errorbar(data = cld_sign12, aes(ymin=emmean-SE, ymax=emmean+SE, colour = status), lwd=0.7, width=0.5)+ 
+  scale_y_continuous(name="Proportion FM", labels = percent)+
+  xlab("")+
+  scale_colour_manual(values=c("purple2", "darkblue")) + 
+  scale_fill_manual(values=c("purple2", "darkblue"))+
+  theme_minimal(base_size = 10) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0),
+        strip.text.x.top = element_text(angle = 90, size = 9, hjust = 0)) +
+  geom_text(data = cld_sign12, family= "sans", show.legend = FALSE, check_overlap = TRUE, size = 3, hjust = 0.3, vjust = 0, aes(x=status,y= Inf,label=.group , colour = status))
+plot_mean_status_FM
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/all_rar/mod_global_means_AMNMvsALL_rar.svg", plot=plot_mean_status_FM, width=10, height=8, scale = 0.5)
+
+s12<- summary(mod_global_AMNMvsALL)
+df12 <- as.data.frame(s12$coefficients$cond)
+df12 <- rownames_to_column(df12, var = "env")
+df12 <- tail(df12, df12 = 6)
+df12$env <- factor(df12$env, levels = df12$env[order(df12$Estimate, decreasing = TRUE)])
+
+custom_env_labels <- c(
+  "coarsefrag" = "coarse fragment",
+  "SOCstock" = "SOC stock",
+  "PH" = "pH")
+
+plot_env_FM_status <- ggplot(df12, mapping =  aes(x = Estimate, y = env)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey", size = 0.8) +  # Dashed line at 0
+  geom_errorbarh(aes(xmin = Estimate - `Std. Error`, xmax = Estimate + `Std. Error`), 
+                 height = 0.4, color = "black", size = 0.8) + 
+  geom_point(aes(color = env), size = 2) +  # Add points with color (for better distinction)
+   # Error bars
+  scale_color_manual(values = rep("black", nrow(df12))) +  # Color all points (you can change to another scheme)
+  labs(x = "Estimate", y = "y", 
+       title = "Enviromental Factors on propFM",
+       color = "Environmental Factors") +  # Change legend title
+  scale_y_discrete(labels = custom_env_labels) +
+  theme_minimal(base_size = 14) +  # Minimal theme with a bigger base font size
+  theme(axis.text.y = element_text(size = 10),  # Adjust the y-axis text size
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        panel.grid.major.y = element_blank(),  # Remove grid lines on y-axis for cleaner look
+        panel.grid.minor = element_blank()) +  # Remove minor grid linesggplot(df12, mapping = aes(x = Estimate, y = env)) +
+  theme_minimal()
+plot_env_FM_status
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/all_rar/mod_global_AMNMvsALL_env_rar.svg", plot=plot_env_FM_status, width=10, height=7, scale = 0.5)
+```
+
+Make dataset for comparison
+```{r}
+#extract from model with status = global
+status_diff_FM <- cld_sign12 %>%
+  dplyr::select(status, emmean, SE) %>% 
+  pivot_wider(names_from = "status", values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff = (emmean_invasive - emmean_native)) %>% 
+  mutate(mean_SE = (sqrt(SE_invasive^2 + SE_native^2))) %>% 
+  mutate(biome = "global") %>% 
+  mutate(prev_status = case_when(
+    (mean_diff - mean_SE < 0 & mean_diff + mean_SE > 0) ~ "n.s.",  # Crosses zero
+    mean_diff > 0 ~ "more FM",                                   # Positive mean_diff
+    mean_diff < 0 ~ "more AM or NM"                                   # Negative mean_diff
+  )) %>% 
+  mutate(difference = "mean_difference")
+status_diff_FM
+```
+
+
+############################################################################################################################
+##################################################################################################################################
+
+#2. Models for Biome
+
+## with env variables
+```{r}
+mod_biome_AMNMvsALL <- readRDS("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/all_rar/mod_biome_AMNMvsAM_NM_rarall.rds")
+summary(mod_biome_AMNMvsALL) #AIC 1108308.3
+Anova(mod_biome_AMNMvsALL)
+performance::model_performance(mod_biome_AMNMvsALL)
+```
+
+
+```{r}
+#extract model means
+#means32 <- emmeans (mod_biome_AMNMvsALL, ~ status | biome , component = "response", cov.reduce = mean, data = dat.sel)
+means32 <- readRDS ("C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Models/all_rar/means_biome_AMNMvsAM_NM_rarall.rds")
+#calculate significant differences
+cld_sign32 <- as.data.frame(cld(means32, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE))
+cld_sign32
+
+s32<- summary(mod_biome_AMNMvsALL)
+df32 <- as.data.frame(s32$coefficients$cond)
+df32 <- rownames_to_column(df32, var = "env")
+df32 <- head(df32, n = 16)
+df32 <- tail(df32, n = 6)
+df32$env <- factor(df32$env, levels = df32$env[order(df32$Estimate, decreasing = TRUE)])
+
+custom_env_labels <- c(
+  "coarsefrag" = "coarse fragment",
+  "SOCstock" = "SOC stock",
+  "PH" = "pH")
+
+plot_env_FM_biome <- ggplot(df32, aes(x = Estimate, y = env)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey", size = 0.8) +  # Dashed line at 0
+  geom_point(aes(color = env), size = 2) +  # Add points with color (for better distinction)
+  geom_errorbarh(aes(xmin = Estimate - `Std. Error`, xmax = Estimate + `Std. Error`), 
+                 height = 0.4, color = "black", size = 0.8) +  # Error bars
+  scale_color_manual(values = rep("black", nrow(df32))) +  # Color all points (you can change to another scheme)
+  labs(x = "Estimate", y = " ", 
+       title = "Enviromental Factors on propFM",
+       color = "Environmental Factors") +  # Change legend title
+  scale_y_discrete(labels = custom_env_labels) +
+  theme_minimal(base_size = 14) +  # Minimal theme with a bigger base font size
+  theme(axis.text.y = element_text(size = 10),  # Adjust the y-axis text size
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        panel.grid.major.y = element_blank(),  # Remove grid lines on y-axis for cleaner look
+        panel.grid.minor = element_blank()) + # Remove minor grid linesggplot(df12, mapping = aes(x = Estimate, y = env)) 
+  theme_minimal()
+plot_env_FM_biome
+
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/all_rar/mod_biome_FMvsAll_status_ selectedbiomes_env_rar.svg", plot=plot_env_FM_biome, width=10, height=7, scale = 0.5)
+```
+
+Plots with emmeans 
+
+```{r}
+#extract from model with biomes and env variables
+df_diff_FMall_biome <- cld_sign32 %>% 
+  dplyr::select(status, emmean, SE, biome) %>% 
+  pivot_wider(id_cols = "biome", names_from = "status", values_from = c("emmean", "SE")) %>% 
+  rowwise() %>% 
+  mutate(mean_diff = (emmean_invasive - emmean_native)) %>% 
+  mutate(mean_SE = (sqrt(SE_invasive^2 + SE_native^2))) %>% 
+  mutate(prev_status = case_when(
+    (mean_diff - mean_SE < 0 & mean_diff + mean_SE > 0) ~ "n.s.",  # Crosses zero
+    mean_diff > 0 ~ "more FM",                                   # Positive mean_diff
+    mean_diff < 0 ~ "more AM or NM"                                   # Negative mean_diff
+  )) %>% 
+  mutate(difference = "mean_difference")
+
+#merge global + biome
+df_diff_FMall_biome_status <- full_join(status_diff_FM, df_diff_FMall_biome, by = NULL)
+df_diff_FMall_biome_status <- df_diff_FMall_biome_status %>% 
+  mutate(biome = as.factor (biome)) %>% 
+  mutate(biome = factor (biome, levels = c("Temperate_BroadLeaf", "Temperate_Coniferous",
+                                           "Mediterranean_woodlands",
+                                          "Tropical_Moist_Broadleaf" , "Xeric_shrublands",
+                                          "Temperate_Grasslands","Montane_Grasslands",
+                                          "Tropical_Grasslands",
+                                          "global")))
+
+background_bands <- data.frame (
+  biome = levels (df_diff_FMall_biome_status$biome),
+  y_min = seq (0.5, length(levels(df_diff_FMall_biome_status$biome)) - 0.5, by = 1),
+  y_max = seq(1.5, length(levels(df_diff_FMall_biome_status$biome)) + 0.5, by = 1),
+  fill_color = rep (c("white", "lightgray"), length.out = length(df_diff_FMall_biome_status$biome)))
+
+custom_biome_labels <- c(
+  "global" = "Global",
+  "Temperate_Grasslands" = "Temperate grasslands, savannas, and shrublands",
+  "Temperate_Coniferous" = "Temperate coniferous forests",
+  "Mediterranean_woodlands" = "Mediterranean forests, woodlands, and scrub",
+  "Montane_Grasslands" = "Montane grasslands and shrublands",
+  "Temperate_BroadLeaf" = "Temperate broadleaf and mixed forests",
+  "Boreal" = "Boreal forests",
+  "Tropical_Grasslands" = "Tropical and subtropical grasslands, savannas, and shrublands",
+  "Xeric_shrublands" = "Deserts and xeric shrublands",
+  "Tropical_Moist_Broadleaf" = "Tropical and subtropical moist broadleaf forests",
+  "Tundra" = "Tundra")
+  
+df_diff_FMall_biome_status
+
+#order HD no biome simp - biome + dist
+plot_FMall2 <- ggplot(data = df_diff_FMall_biome_status, 
+                           aes(y = biome, x= mean_diff, colour = prev_status)) +
+  geom_rect(data = background_bands, aes(xmin = -Inf, xmax = +Inf,
+                                         ymin = y_min, ymax = y_max,
+                                         fill = fill_color),
+            inherit.aes = F, alpha = 0.3) +
+  scale_fill_identity() + 
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey") +
+  
+  geom_point (size = 2) +
+  geom_errorbarh(aes(y=biome, xmin=mean_diff-mean_SE, xmax=mean_diff+mean_SE,
+                     linewidth = 0.8), height = 0.6) +
+  
+  labs (x = "pFM non-native - pFM native",
+        y = "",
+        colour = "Prevalent mycorrhizal type of non-native",
+        title = "") +
+  
+  theme_minimal() + 
+  theme (axis.text.y = element_text(size = 10),
+         axis.title.x = element_text(size = 7),
+         panel.grid.major.y = element_blank(),  # Remove grid lines on y-axis for cleaner look
+        panel.grid.minor = element_blank(),
+        legend.title.position = "top",
+        legend.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  
+  scale_y_discrete(labels = custom_biome_labels) +
+  scale_size_identity() +
+  scale_linewidth_identity()+
+  
+  guides(color = guide_legend(reverse = TRUE)) + 
+  
+  scale_color_manual(values = c(
+    "more FM" = "blue4",
+    "n.s." = "gray45",
+    "more AM or NM" = "darkred"
+  ))
+
+plot_FMall2
+#save
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/all_rar/mod_biome_difference_AMNMvsALL_status_biomes_rar.png", plot=plot_FMall2, width=15, height=7, scale = 0.5,  dpi = 300)
+
+ggsave(file="C:/Users/sarag/OneDrive - ETH Zurich/1_Invasion/Inv_Data/sPlot4_Sara/Figures/all_rar/mod_biome_difference_AMNMvsALL_status_biomes_rar.svg",plot=plot_FMall2, width=15, height=7, scale = 0.5)
+```
+
+
